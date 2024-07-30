@@ -6,7 +6,7 @@ from torchvision import transforms
 from data.pascal import DatasetPASCAL
 from data.coco import DatasetCOCO
 from data.fss import DatasetFSS
-
+from data.defect import DatasetVISION
 
 class FSSDataset:
 
@@ -17,6 +17,7 @@ class FSSDataset:
             'pascal': DatasetPASCAL,
             'coco': DatasetCOCO,
             'fss': DatasetFSS,
+            'defect': DatasetVISION
         }
 
         cls.img_mean = [0.485, 0.456, 0.406]
