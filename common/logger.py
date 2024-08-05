@@ -20,6 +20,8 @@ class AverageMeter:
             self.nclass = 80
         elif self.benchmark == 'fss':
             self.nclass = 1000
+        elif self.benchmark == 'defect':
+            self.nclass = 56
 
         self.intersection_buf = torch.zeros([2, self.nclass]).float().cuda()
         self.union_buf = torch.zeros([2, self.nclass]).float().cuda()

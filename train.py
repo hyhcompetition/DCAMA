@@ -25,19 +25,20 @@ def train(epoch, model, dataloader, optimizer, training):
         batch = utils.to_cuda(batch)
         logit_mask = model(batch['query_img'], batch['support_imgs'].squeeze(1), batch['support_masks'].squeeze(1))
         pred_mask = logit_mask.argmax(dim=1)
-
+    
         # 2. Compute loss & update model parameters
         loss = model.module.compute_objective(logit_mask, batch['query_mask'])
         if training:
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-
+    
         # 3. Evaluate prediction
         area_inter, area_union = Evaluator.classify_prediction(pred_mask, batch)
         average_meter.update(area_inter, area_union, batch['class_id'], loss.detach().clone())
+        
         average_meter.write_process(idx, len(dataloader), epoch, write_batch_idx=50)
-
+    
     # Write evaluation results
     average_meter.write_result('Training' if training else 'Validation', epoch)
     avg_loss = utils.mean(average_meter.loss_buf)
@@ -61,6 +62,15 @@ if __name__ == '__main__':
     model.to(device)
     model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank,
                                                 find_unused_parameters=True)
+        # Load trained model
+    if args.load != '': 
+        params = model.state_dict()
+        state_dict = torch.load(args.load)
+
+        for k1, k2 in zip(list(state_dict.keys()), params.keys()):
+            state_dict[k2] = state_dict.pop(k1)
+
+        model.load_state_dict(state_dict)
 
     # Helper classes (for training) initialization
     optimizer = optim.SGD([{"params": model.parameters(), "lr": args.lr,

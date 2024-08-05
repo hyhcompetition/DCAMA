@@ -7,7 +7,7 @@ def parse_opts():
 
     # common
     parser.add_argument('--datapath', type=str, default='./datasets')
-    parser.add_argument('--benchmark', type=str, default='pascal', choices=['pascal', 'coco', 'fss'])
+    parser.add_argument('--benchmark', type=str, default='pascal', choices=['defect','pascal', 'coco', 'fss'])
     parser.add_argument('--fold', type=int, default=0, choices=[0, 1, 2, 3])
     parser.add_argument('--bsz', type=int, default=20)
     parser.add_argument('--nworker', type=int, default=8)

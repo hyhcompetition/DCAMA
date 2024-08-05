@@ -15,8 +15,8 @@ class DatasetVISION(Dataset):
         self.split = 'test' if split in ['val', 'test'] else 'train'
         self.fold = fold # int {0，1，2，3}
         self.nfolds = 4
-        self.nclass = 20
-        self.benchmark = 'pascal'
+        self.nclass = 56
+        self.benchmark = 'defect'
         self.shot = shot
         self.use_original_imgsize = use_original_imgsize
 
@@ -34,12 +34,16 @@ class DatasetVISION(Dataset):
         idx %= len(self.img_metadata)  # for testing, as n_images < 1000
         query_name, support_names, class_sample, pair_type = self.sample_episode(idx)
         query_img, query_cmask, support_imgs, support_cmasks, org_qry_imsize = self.load_frame(query_name, support_names)
-
+        
         query_img = self.transform(query_img)
+    
+    
+        
         if not self.use_original_imgsize:
             query_cmask = F.interpolate(query_cmask.unsqueeze(0).unsqueeze(0).float(), query_img.size()[-2:], mode='nearest').squeeze()
         query_mask = (query_cmask / 255).floor()
-        
+       # if pair_type =="n":
+        #    query_mask = torch.zeros_like(query_mask)
         support_imgs = torch.stack([self.transform(support_img) for support_img in support_imgs])
 
         support_masks = []
@@ -48,6 +52,7 @@ class DatasetVISION(Dataset):
             scmask = (scmask / 255).floor()
             support_masks.append(scmask)
         support_masks = torch.stack(support_masks)
+
         batch = {'query_img': query_img,
                 'query_mask': query_mask,
                 'query_name': query_name,
@@ -90,7 +95,7 @@ class DatasetVISION(Dataset):
         return Image.open(os.path.join(self.img_path, img_name) + '.jpg')
 
     def sample_episode(self, idx):
-        query_name, support_name, class_sample, pair_type = self.img_metadata[idx]
+        support_name, query_name, class_sample, pair_type = self.img_metadata[idx]
 
         support_names = [support_name]
         return query_name, support_names, class_sample, pair_type
@@ -106,7 +111,7 @@ class DatasetVISION(Dataset):
             return class_ids_val
 
     def build_img_metadata(self):
-        metadata = os.path.join('data/splits/defect/%s.txt' % (self.split))
+        metadata = os.path.join('data/splits/defect/patch/%s.txt' % (self.split))
         with open(metadata, 'r') as f:
             metadata = f.read().split('\n')[:-1]
         img_metadata=[]
