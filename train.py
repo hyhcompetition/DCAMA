@@ -63,7 +63,8 @@ if __name__ == '__main__':
     model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank,
                                                 find_unused_parameters=True)
         # Load trained model
-    if args.load != '': 
+    if args.load != '':
+        print("*******loading model***********")
         params = model.state_dict()
         state_dict = torch.load(args.load)
 

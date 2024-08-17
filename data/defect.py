@@ -93,6 +93,7 @@ class DatasetVISION(Dataset):
         self.benchmark = 'defect'
         self.shot = shot
         self.use_original_imgsize = use_original_imgsize
+        self.datapath = datapath
 
         self.img_path = os.path.join(datapath, 'images')
         self.ann_path = os.path.join(datapath, 'annotations')
@@ -117,8 +118,8 @@ class DatasetVISION(Dataset):
         if not self.use_original_imgsize:
             query_cmask = F.interpolate(query_cmask.unsqueeze(0).unsqueeze(0).float(), query_img.size()[-2:], mode='nearest').squeeze()
         query_mask = (query_cmask / 255).floor()
-        if pair_type =="n":
-            query_mask = torch.zeros_like(query_mask)
+        #if pair_type =="n":
+            #query_mask = torch.zeros_like(query_mask)
         support_imgs = torch.stack([self.transform(support_img) for support_img in support_imgs])
 
         support_masks = []
@@ -162,12 +163,14 @@ class DatasetVISION(Dataset):
             for t in self.custom_transform:
                 si,sm=t(si,sm)
                 query_img, query_mask = t(query_img, query_mask)
-            support_imgs = [si]
+            support_imgs = [Image.fromarray(si)]
             support_masks = [sm]
+        else:
+            support_imgs = [Image.fromarray(support_imgs[0])]
         support_masks = [torch.tensor(i) for i in support_masks]
         query_mask = torch.tensor(query_mask)
 
-        return query_img, query_mask, support_imgs, support_masks, org_qry_imsize
+        return Image.fromarray(query_img), query_mask, support_imgs, support_masks, org_qry_imsize
 
 
     def read_mask(self, img_name):
@@ -199,7 +202,7 @@ class DatasetVISION(Dataset):
             return class_ids_val
 
     def build_img_metadata(self):
-        metadata = os.path.join('data/splits/defect/patch/%s.txt' % (self.split))
+        metadata = f"{self.datapath}/imageset/{self.split}.txt"
         with open(metadata, 'r') as f:
             metadata = f.read().split('\n')[:-1]
         img_metadata=[]
