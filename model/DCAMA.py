@@ -94,12 +94,15 @@ class DCAMA(nn.Module):
                                       CBAM(16),
                                       nn.Conv2d(16, 2, (3, 3), padding=(1, 1), bias=True))
 
-    def forward(self, query_img, support_img, support_mask):
+    def forward(self, query_img, support_img, support_mask, Gquery_img, Gsupport_img, Gsupport_mask):
         with torch.no_grad():
             query_feats = self.extract_feats(query_img)
             support_feats = self.extract_feats(support_img)
+            Gquery_feats = self.extract_feats(Gquery_img)
+            Gsupport_feats = self.extract_feats(Gsupport_img)
+            
 
-        logit_mask_global = self.model_global(query_feats, support_feats, support_mask.clone())
+        logit_mask_global = self.model_global(Gquery_feats, Gsupport_feats, Gsupport_mask.clone())
         logit_mask_local = self.model_local(query_feats, support_feats, support_mask.clone())
         logit_mask = torch.stack((logit_mask_global,logit_mask_local),dim=1)
         logit_mask = self.mask_mixer(logit_mask)
