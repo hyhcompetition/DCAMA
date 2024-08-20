@@ -23,7 +23,7 @@ def train(epoch, model, dataloader, optimizer, training):
 
         # 1. forward pass
         batch = utils.to_cuda(batch)
-        logit_mask = model(batch['query_img'], batch['support_imgs'].squeeze(1), batch['support_masks'].squeeze(1))
+        logit_mask = model(batch['query_img'], batch['support_imgs'].squeeze(1), batch['support_masks'].squeeze(1),batch['Gquery_img'], batch['Gsupport_imgs'].squeeze(1), batch['Gsupport_masks'].squeeze(1))
         pred_mask = logit_mask.argmax(dim=1)
     
         # 2. Compute loss & update model parameters
