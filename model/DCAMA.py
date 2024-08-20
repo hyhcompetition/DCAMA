@@ -9,6 +9,46 @@ from torchvision.models import resnet
 
 from .base.swin_transformer import SwinTransformer
 from model.base.transformer import MultiHeadedAttention, PositionalEncoding
+class ChannelAttention(nn.Module):
+    def __init__(self, in_channels, reduction=16):
+        super(ChannelAttention, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.max_pool = nn.AdaptiveMaxPool2d(1)
+        
+        self.fc1 = nn.Conv2d(in_channels, in_channels // reduction, 1, bias=False)
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Conv2d(in_channels // reduction, in_channels, 1, bias=False)
+        self.sigmoid = nn.Sigmoid()
+        
+    def forward(self, x):
+        avg_out = self.fc2(self.relu(self.fc1(self.avg_pool(x))))
+        max_out = self.fc2(self.relu(self.fc1(self.max_pool(x))))
+        out = avg_out + max_out
+        return self.sigmoid(out)
+
+class SpatialAttention(nn.Module):
+    def __init__(self, kernel_size=7):
+        super(SpatialAttention, self).__init__()
+        self.conv1 = nn.Conv2d(2, 1, kernel_size, padding=(kernel_size - 1) // 2, bias=False)
+        self.sigmoid = nn.Sigmoid()
+        
+    def forward(self, x):
+        avg_out = torch.mean(x, dim=1, keepdim=True)
+        max_out, _ = torch.max(x, dim=1, keepdim=True)
+        x = torch.cat([avg_out, max_out], dim=1)
+        x = self.conv1(x)
+        return self.sigmoid(x)
+
+class CBAM(nn.Module):
+    def __init__(self, in_channels, reduction=4, kernel_size=3):
+        super(CBAM, self).__init__()
+        self.channel_attention = ChannelAttention(in_channels, reduction)
+        self.spatial_attention = SpatialAttention(kernel_size)
+        
+    def forward(self, x):
+        x = x * self.channel_attention(x)
+        x = x * self.spatial_attention(x)
+        return x
 
 
 class DCAMA(nn.Module):
@@ -45,17 +85,24 @@ class DCAMA(nn.Module):
         # define model
         self.lids = reduce(add, [[i + 1] * x for i, x in enumerate(self.nlayers)])
         self.stack_ids = torch.tensor(self.lids).bincount()[-4:].cumsum(dim=0)
-        self.model = DCAMA_model(in_channels=self.feat_channels, stack_ids=self.stack_ids)
+        self.model_global = DCAMA_model(in_channels=self.feat_channels, stack_ids=self.stack_ids)
+        self.model_local = DCAMA_model(in_channels=self.feat_channels, stack_ids=self.stack_ids)
 
         self.cross_entropy_loss = nn.CrossEntropyLoss()
+        self.mask_mixer = nn.Sequential(nn.Conv2d(4, 16, (3, 3), padding=(1, 1), bias=True),
+                                      nn.ReLU(),
+                                      CBAM(16),
+                                      nn.Conv2d(16, 2, (3, 3), padding=(1, 1), bias=True))
 
     def forward(self, query_img, support_img, support_mask):
         with torch.no_grad():
             query_feats = self.extract_feats(query_img)
             support_feats = self.extract_feats(support_img)
 
-        logit_mask = self.model(query_feats, support_feats, support_mask.clone())
-
+        logit_mask_global = self.model_global(query_feats, support_feats, support_mask.clone())
+        logit_mask_local = self.model_local(query_feats, support_feats, support_mask.clone())
+        logit_mask = torch.stack((logit_mask_global,logit_mask_local),dim=1)
+        logit_mask = self.mask_mixer(logit_mask)
         return logit_mask
 
     def extract_feats(self, img):
