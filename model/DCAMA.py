@@ -101,11 +101,15 @@ class DCAMA(nn.Module):
             Gquery_feats = self.extract_feats(Gquery_img)
             Gsupport_feats = self.extract_feats(Gsupport_img)
             
-
+        print("extract_feats")
         logit_mask_global = self.model_global(Gquery_feats, Gsupport_feats, Gsupport_mask.clone())
         logit_mask_local = self.model_local(query_feats, support_feats, support_mask.clone())
-        logit_mask = torch.stack((logit_mask_global,logit_mask_local),dim=1)
+        print(logit_mask_global.shape)
+        print(logit_mask_local.shape)
+        logit_mask = torch.cat((logit_mask_local, logit_mask_global), dim=1)
+        print(logit_mask.shape)
         logit_mask = self.mask_mixer(logit_mask)
+        
         return logit_mask
 
     def extract_feats(self, img):

@@ -6,7 +6,7 @@ def parse_opts():
     parser = argparse.ArgumentParser(description='Dense Cross-Query-and-Support Attention Weighted Mask Aggregation for Few-Shot Segmentation')
 
     # common
-    parser.add_argument('--datapath', type=str, default='./datasets')
+    parser.add_argument('--datapath', type=str, default='../../Dataset/VISION24-data-challenge-train/data_patch')
     parser.add_argument('--benchmark', type=str, default='pascal', choices=['defect','pascal', 'coco', 'fss'])
     parser.add_argument('--fold', type=int, default=0, choices=[0, 1, 2, 3])
     parser.add_argument('--bsz', type=int, default=20)

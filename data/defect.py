@@ -193,7 +193,7 @@ class DatasetVISION(Dataset):
         return Image.fromarray(query_img), query_mask, support_imgs, support_masks, org_qry_imsize
     
     def load_global_frame(self, query_name, support_names):
-        query_name = query_name.split("-")[0]
+        query_name = query_name.replace('back','').split("-")[0]
         support_names = [i.replace('back','').split("-")[0] for i in support_names]
         
         query_img = self.read_img(query_name)
@@ -259,9 +259,9 @@ class DatasetVISION(Dataset):
         return img_metadata_classwise
 
 if __name__ == "__main__":
-    datapath = "/home/hyh/Documents/Eccv/Dataset/VISION24-data-challenge-train/data_patch_1shot"
+    datapath = "/home/hyh/Documents/Eccv/Dataset/VISION24-data-challenge-train/data_patch"
     tr=  transforms.Compose([transforms.ToTensor(), transforms.Resize(size=(388, 388))])
-    mydata = DatasetVISION(datapath,0,tr,"train",1,False)
+    mydata = DatasetVISION(datapath, 0,tr,"train",1,False)
     dataloader = DataLoader(mydata, batch_size=4, shuffle=True, num_workers=1)
     for idx, batch in enumerate(dataloader):
         print(batch)
