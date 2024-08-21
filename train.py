@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch
 
 from model.DCAMA import DCAMA
+from model.DCAMA import DDCAMA
 from common.logger import Logger, AverageMeter
 from common.evaluation import Evaluator
 from common.config import parse_opts
@@ -11,7 +12,7 @@ from common import utils
 from data.dataset import FSSDataset
 
 
-def train(epoch, model, dataloader, optimizer, training):
+def train(epoch, model,dataloader, optimizer, training):
     r""" Train """
 
     # Force randomness during training / freeze randomness during testing
@@ -57,7 +58,7 @@ if __name__ == '__main__':
     torch.cuda.set_device(args.local_rank)
 
     # Model initialization
-    model = DCAMA(args.backbone, args.feature_extractor_path, False)
+    model = DDCAMA(args.feature_extractor_path, args.global_path,  args.local_path)
     device = torch.device("cuda", args.local_rank)
     model.to(device)
     model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank,

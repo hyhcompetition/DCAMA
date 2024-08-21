@@ -50,7 +50,46 @@ class CBAM(nn.Module):
         x = x * self.spatial_attention(x)
         return x
 
+class DDCAMA(nn.Module):
+    def __init__(self,pretrained_path, global_pth, local_pth) -> None:
+        super().__init__()
+        self.global_model = DCAMA('swin',pretrained_path,False)
+        self.local_model = DCAMA('swin',pretrained_path,False)
+        self.init_model(self.global_model, global_pth)
+        self.init_model(self.local_model,local_pth)
+        self.mask_mixer = nn.Sequential(nn.Conv2d(4, 16, (3, 3), padding=(1, 1), bias=True),
+                                      nn.ReLU(),
+                                      CBAM(16),
+                                      nn.Conv2d(16, 2, (3, 3), padding=(1, 1), bias=True))
+        self.cross_entropy_loss = nn.CrossEntropyLoss()
+    def init_model(self, model, load):
+        if load != '':
+            print("*******loading model***********")
+            params = model.state_dict()
+            state_dict = torch.load(load)
 
+            for k1, k2 in zip(list(state_dict.keys()), params.keys()):
+                state_dict[k2] = state_dict.pop(k1)
+
+            model.load_state_dict(state_dict)
+    def train_mode(self):
+        self.train()
+        self.global_model.train_mode()
+        self.local_model.train_mode()
+        
+    def forward(self, query_img, support_img, support_mask, Gquery_img, Gsupport_img, Gsupport_mask):
+        local_pred = self.local_model(query_img, support_img, support_mask)
+        global_pred = self.global_model(Gquery_img, Gsupport_img, Gsupport_mask)
+        final_pred = torch.cat((local_pred,global_pred),dim=1)
+        final_pred = self.mask_mixer(final_pred)
+        return final_pred
+
+    def compute_objective(self, logit_mask, gt_mask):
+        bsz = logit_mask.size(0)
+        logit_mask = logit_mask.view(bsz, 2, -1)
+        gt_mask = gt_mask.view(bsz, -1).long()
+
+        return self.cross_entropy_loss(logit_mask, gt_mask)
 class DCAMA(nn.Module):
 
     def __init__(self, backbone, pretrained_path, use_original_imgsize):
@@ -85,30 +124,19 @@ class DCAMA(nn.Module):
         # define model
         self.lids = reduce(add, [[i + 1] * x for i, x in enumerate(self.nlayers)])
         self.stack_ids = torch.tensor(self.lids).bincount()[-4:].cumsum(dim=0)
-        self.model_global = DCAMA_model(in_channels=self.feat_channels, stack_ids=self.stack_ids)
-        self.model_local = DCAMA_model(in_channels=self.feat_channels, stack_ids=self.stack_ids)
+        self.model = DCAMA_model(in_channels=self.feat_channels, stack_ids=self.stack_ids)
 
         self.cross_entropy_loss = nn.CrossEntropyLoss()
-        self.mask_mixer = nn.Sequential(nn.Conv2d(4, 16, (3, 3), padding=(1, 1), bias=True),
-                                      nn.ReLU(),
-                                      CBAM(16),
-                                      nn.Conv2d(16, 2, (3, 3), padding=(1, 1), bias=True))
+        
 
-    def forward(self, query_img, support_img, support_mask, Gquery_img, Gsupport_img, Gsupport_mask):
+    def forward(self, query_img, support_img, support_mask):
         with torch.no_grad():
             query_feats = self.extract_feats(query_img)
             support_feats = self.extract_feats(support_img)
-            Gquery_feats = self.extract_feats(Gquery_img)
-            Gsupport_feats = self.extract_feats(Gsupport_img)
+
             
-        print("extract_feats")
-        logit_mask_global = self.model_global(Gquery_feats, Gsupport_feats, Gsupport_mask.clone())
-        logit_mask_local = self.model_local(query_feats, support_feats, support_mask.clone())
-        print(logit_mask_global.shape)
-        print(logit_mask_local.shape)
-        logit_mask = torch.cat((logit_mask_local, logit_mask_global), dim=1)
-        print(logit_mask.shape)
-        logit_mask = self.mask_mixer(logit_mask)
+        logit_mask = self.model(query_feats, support_feats, support_mask.clone())
+
         
         return logit_mask
 

@@ -22,6 +22,8 @@ def parse_opts():
 
     # for test
     parser.add_argument('--load', type=str, default='')
+    parser.add_argument('--global_path', type=str, default='')
+    parser.add_argument('--local_path', type=str, default='')
     parser.add_argument('--nshot', type=int, default=1)
     parser.add_argument('--visualize', action='store_true')
     parser.add_argument('--vispath', type=str, default='./vis')
