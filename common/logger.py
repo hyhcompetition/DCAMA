@@ -79,7 +79,7 @@ class Logger:
     def initialize(cls, args, training):
         logtime = datetime.datetime.now().__format__('_%m%d_%H%M%S')
         logpath = os.path.join(args.logpath, 'train/fold_' + str(args.fold) + logtime) if training \
-            else os.path.join(args.logpath, 'test/fold_' + args.load.split('/')[-2].split('.')[0] + logtime)
+            else os.path.join(args.logpath, 'test/fold_' + logtime)
         if logpath == '': logpath = logtime
 
         cls.logpath = logpath

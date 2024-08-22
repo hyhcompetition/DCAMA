@@ -55,8 +55,9 @@ class DDCAMA(nn.Module):
         super().__init__()
         self.global_model = DCAMA('swin',pretrained_path,False)
         self.local_model = DCAMA('swin',pretrained_path,False)
-        self.init_model(self.global_model, global_pth)
-        self.init_model(self.local_model,local_pth)
+        if global_pth != "" and local_pth != "":
+            self.init_model(self.global_model, global_pth)
+            self.init_model(self.local_model,local_pth)
         self.mask_mixer = nn.Sequential(nn.Conv2d(4, 16, (3, 3), padding=(1, 1), bias=True),
                                       nn.ReLU(),
                                       CBAM(16),
@@ -90,6 +91,33 @@ class DDCAMA(nn.Module):
         gt_mask = gt_mask.view(bsz, -1).long()
 
         return self.cross_entropy_loss(logit_mask, gt_mask)
+    def predict_mask_nshot(self, batch, nshot):
+        r""" n-shot inference """
+        query_img = batch['query_img']
+        support_imgs = batch['support_imgs']
+        support_masks = batch['support_masks']
+        Gquery_img = batch['Gquery_img']
+        Gsupport_imgs = batch['Gsupport_imgs'].squeeze(1)
+        Gsupport_masks = batch['Gsupport_masks'].squeeze(1)
+
+        if nshot == 1:
+            logit_mask = self(query_img, support_imgs[:, 0], support_masks[:, 0], Gquery_img, Gsupport_imgs[:, 0], Gsupport_masks[:, 0])
+        else:
+            with torch.no_grad():
+                query_feats = self.local_model.extract_feats(query_img)
+                n_support_feats = []
+                for k in range(nshot):
+                    support_feats = self.local_model.extract_feats(support_imgs[:, k])
+                    n_support_feats.append(support_feats)
+                    
+            local_logit_mask = self.local_model.model(query_feats, n_support_feats, support_masks.clone(), nshot)
+            global_logit_mask = self.global_model(Gquery_img, Gsupport_imgs, Gsupport_masks)
+            
+            logit_mask = self.mask_mixer(torch.cat((local_logit_mask,global_logit_mask),dim=1))
+
+        logit_mask = F.interpolate(logit_mask, support_imgs[0].size()[2:], mode='bilinear', align_corners=True)
+
+        return logit_mask.argmax(dim=1)
 class DCAMA(nn.Module):
 
     def __init__(self, backbone, pretrained_path, use_original_imgsize):
