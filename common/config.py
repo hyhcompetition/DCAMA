@@ -21,7 +21,7 @@ def parse_opts():
     parser.add_argument('--local_rank', default=0, type=int, help='node rank for distributed training')
 
     # for test
-    parser.add_argument('--load', type=str, default='best_model.pt')
+    parser.add_argument('--load', type=str, default='cheatv3/DCAMA_PATCH_CHEAT/train/fold_0_0823_003912/best_model.pt')
     parser.add_argument('--global_path', type=str, default='')
     parser.add_argument('--local_path', type=str, default='')
     parser.add_argument('--nshot', type=int, default=5)

@@ -250,6 +250,7 @@ if __name__ == '__main__':
     DATAPATH=args.datapath
     with open(IMAGESET,"r") as f:
         metadata = f.read().split('\n')
+        metadata = sorted(metadata)
         img_metadata=[]
         for data in metadata:
             if data != '':
