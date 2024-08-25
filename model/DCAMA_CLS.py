@@ -9,6 +9,93 @@ from torchvision.models import resnet
 
 from .base.swin_transformer import SwinTransformer
 from model.base.transformer import MultiHeadedAttention, PositionalEncoding
+
+class FeatureSimilarity(nn.Module):
+    def __init__(self):
+        super(FeatureSimilarity, self).__init__()
+        # 初始化可训练的权重参数，初始值设置为1.0
+        self.w1 = nn.Parameter(torch.tensor(1.0, requires_grad=True))
+        self.w2 = nn.Parameter(torch.tensor(1.0, requires_grad=True))
+        self.w3 = nn.Parameter(torch.tensor(1.0, requires_grad=True))
+        self.w4 = nn.Parameter(torch.tensor(1.0, requires_grad=True))
+
+    def forward(self, A, B):
+        """
+        对输入特征图 A 和 B 进行全局平均池化和全局最大池化，
+        然后计算相应的 L2 距离和余弦相似度，并结合权重参数进行综合度量。
+
+        参数:
+        A (torch.Tensor): 第一个特征图，形状为 [batch_size, channels, height, width]
+        B (torch.Tensor): 第二个特征图，形状为 [batch_size, channels, height, width]
+
+        返回:
+        tuple: 包含四个张量 (L2_distance_avg, L2_distance_max, cosine_similarity_avg, cosine_similarity_max, combined_metric)
+        """
+
+        # 确保 A 和 B 的形状相同
+        assert A.shape == B.shape, "输入特征图 A 和 B 的形状必须相同"
+
+        # 全局平均池化
+        a1 = F.adaptive_avg_pool2d(A, (1, 1))  # 输出形状为 [batch_size, channels, 1, 1]
+        b1 = F.adaptive_avg_pool2d(B, (1, 1))  # 输出形状为 [batch_size, channels, 1, 1]
+
+        # 全局最大池化
+        a2 = F.adaptive_max_pool2d(A, (1, 1))  # 输出形状为 [batch_size, channels, 1, 1]
+        b2 = F.adaptive_max_pool2d(B, (1, 1))  # 输出形状为 [batch_size, channels, 1, 1]
+
+        # 计算 L2 距离
+        L2_distance_avg = torch.norm(a1 - b1, p=2, dim=(1, 2, 3))  # 对每个batch计算L2距离
+        L2_distance_max = torch.norm(a2 - b2, p=2, dim=(1, 2, 3))  # 对每个batch计算L2距离
+
+        # 计算余弦相似度
+        cosine_similarity = torch.nn.CosineSimilarity(dim=1, eps=1e-6)
+
+        # 将张量形状从 [batch_size, channels, 1, 1] 转换为 [batch_size, channels]
+        a1_flat = a1.view(a1.size(0), a1.size(1))
+        b1_flat = b1.view(b1.size(0), b1.size(1))
+        a2_flat = a2.view(a2.size(0), a2.size(1))
+        b2_flat = b2.view(b2.size(0), b2.size(1))
+
+        # 计算每个batch的余弦相似度
+        cosine_similarity_avg = cosine_similarity(a1_flat, b1_flat)
+        cosine_similarity_max = cosine_similarity(a2_flat, b2_flat)
+
+        # 计算加权综合度量（这里假设 L2 距离越小越相似，余弦相似度越大越相似）
+        combined_metric = self.w1 * L2_distance_avg + self.w2 * L2_distance_max + self.w3 * (1 - cosine_similarity_avg) + self.w4 * (1 - cosine_similarity_max)
+
+        return  combined_metric
+    
+class MultipleFeatureSimilarity(nn.Module):
+    def __init__(self, num_instances=24):
+        super(MultipleFeatureSimilarity, self).__init__()
+        # 使用 ModuleList 初始化多个 FeatureSimilarity 实例
+        self.similarity_modules = nn.ModuleList([FeatureSimilarity() for _ in range(num_instances)])
+        # 为每个 FeatureSimilarity 实例添加一个额外的可训练参数
+        self.extra_params = nn.ParameterList([nn.Parameter(torch.tensor(1.0, requires_grad=True)) for _ in range(num_instances)])
+
+    def forward(self, A_list, B_list):
+        """
+        对每对输入特征图 A 和 B 使用对应的 FeatureSimilarity 实例计算相似度和距离度量。
+
+        参数:
+        A_list (list[torch.Tensor]): 特征图 A 的列表，每个元素形状为 [batch_size, channels, height, width]
+        B_list (list[torch.Tensor]): 特征图 B 的列表，每个元素形状为 [batch_size, channels, height, width]
+
+        返回:
+        list: 包含每对输入特征图计算得到的相似度和距离度量
+        """
+        assert len(A_list) == len(B_list) == len(self.similarity_modules), "输入特征图列表和模块数量必须相同"
+
+        results = 0
+        for i, (A, B) in enumerate(zip(A_list, B_list)):
+            # 使用对应的 FeatureSimilarity 实例计算相似度和距离度量
+            result = self.similarity_modules[i](A, B)
+            # 将额外的可训练参数应用到每个计算结果上
+            results += result * self.extra_params[i]
+    
+
+        return results
+    
 class ChannelAttention(nn.Module):
     def __init__(self, in_channels, reduction=16):
         super(ChannelAttention, self).__init__()
@@ -105,8 +192,6 @@ class DDCAMA(nn.Module):
         else:
             with torch.no_grad():
                 query_feats = self.local_model.extract_feats(query_img)
-                for q in query_feats:
-                    print(q.shape)
                 n_support_feats = []
                 for k in range(nshot):
                     support_feats = self.local_model.extract_feats(support_imgs[:, k])
@@ -158,17 +243,19 @@ class DCAMA(nn.Module):
 
         self.cross_entropy_loss = nn.CrossEntropyLoss()
         
+        self.mutilsim = MultipleFeatureSimilarity()
+        
 
-    def forward(self, query_img, support_img, support_mask):
+    def forward(self, query_img, support_img):
         with torch.no_grad():
             query_feats = self.extract_feats(query_img)
             support_feats = self.extract_feats(support_img)
 
-            
-        logit_mask = self.model(query_feats, support_feats, support_mask.clone())
+        output = self.mutilsim(query_feats,support_feats)
+        #logit_mask = self.model(query_feats, support_feats, support_mask.clone())
 
         
-        return logit_mask
+        return output
 
     def extract_feats(self, img):
         r""" Extract input image features """
@@ -381,3 +468,4 @@ class DCAMA_model(nn.Module):
             building_block_layers.append(nn.ReLU(inplace=True))
 
         return nn.Sequential(*building_block_layers)
+

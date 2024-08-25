@@ -126,37 +126,17 @@ class DatasetVISION(Dataset):
             scmask = (scmask / 255).floor()
             support_masks.append(scmask)
         support_masks = torch.stack(support_masks)
-        
-        Gquery_img, Gquery_cmask, Gsupport_imgs, Gsupport_cmasks, Gorg_qry_imsize = self.load_global_frame(query_name, support_names)
-        
-        Gquery_img = self.transform(Gquery_img)
-    
-        if not self.use_original_imgsize:
-            Gquery_cmask = F.interpolate(Gquery_cmask.unsqueeze(0).unsqueeze(0).float(), Gquery_img.size()[-2:], mode='nearest').squeeze()
-        Gquery_mask = (Gquery_cmask / 255).floor()
-        if pair_type =="n":
-            Gquery_mask = torch.zeros_like(Gquery_mask)
-        Gsupport_imgs = torch.stack([self.transform(support_img) for support_img in Gsupport_imgs])
 
-        Gsupport_masks = []
-        for scmask in Gsupport_cmasks:
-            scmask = F.interpolate(scmask.unsqueeze(0).unsqueeze(0).float(), support_imgs.size()[-2:], mode='nearest').squeeze()
-            scmask = (scmask / 255).floor()
-            Gsupport_masks.append(scmask)
-        Gsupport_masks = torch.stack(Gsupport_masks)
 
         batch = {'query_img': query_img,
                 'query_mask': query_mask,
                 'query_name': query_name,
-                'Gquery_img' : Gquery_img,
-                'Gquery_mask' : Gquery_mask,
+
                 
                 'org_query_imsize': org_qry_imsize,
 
                 'support_imgs': support_imgs,
                 'support_masks': support_masks,
-                'Gsupport_imgs': Gsupport_imgs,
-                'Gsupport_masks': Gsupport_masks,
                 'support_names': support_names,
 
                 'class_id': torch.tensor(class_sample)}
